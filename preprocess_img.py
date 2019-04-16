@@ -8,9 +8,10 @@ from sklearn.decomposition import PCA
 import pandas as pd
 import csv
 import sys
+import itertools
 
 #set path of libsvm
-sys.path.insert(0,"/home/gaurav/Desktop/IITD_1stsem/ML/libsvm-3.23/python")
+sys.path.insert(0,"/home/gaurav/Desktop/MachineLearning/libsvm-3.23")
 
 from svm import svm_parameter, svm_problem
 from svmutil import svm_train, svm_predict
@@ -55,7 +56,7 @@ def preprocess_img(root_folder,dump_file):
 
     dump_object(dump_file,[listPCAimages,rewards])
 
-def get_training_data(dump_file):
+def get_training_data(dump_file,mode):
     #read pickle file
     processed_data = get_object(dump_file)
     listPCAimages,rewards = processed_data[0],processed_data[1]
@@ -72,22 +73,36 @@ def get_training_data(dump_file):
             #break if exceeds
             if(i+9 >= len(images)):
                 break
-            img_set = images[i:i+7]
-            img_sampling = img_set[np.random.choice(img_set.shape[0], 5, replace=False), :]
-            vec_img = img_sampling.flatten()
+            
+            if(mode == 1):
+                img_set = images[i:i+6]
 
-            #create training data
-            feature_data.append(vec_img)
-            label_data.append(reward[i+9])
+                #get all combinations of images
+                combs = list(itertools.combinations(img_set, 4))
+                for comb in combs:
+                    img_sampling = np.vstack((np.array(comb),images[i+7]))
+                    vec_img = img_sampling.flatten()
+
+                    #create training data
+                    feature_data.append(vec_img)
+                    label_data.append(reward[i+9])
+            else:
+                img_set = images[i:i+7]
+                img_sampling = img_set[np.random.choice(img_set.shape[0], 5, replace=False), :]
+                vec_img = img_sampling.flatten()
+
+                #create training data
+                feature_data.append(vec_img)
+                label_data.append(reward[i+9])
     return feature_data,label_data
 
-def train_data_csv(root_folder,dump_file,csv_file):
+def train_data_csv(root_folder,dump_file,csv_file,mode):
 
     if os.path.exists(root_folder + '/' + csv_file):
         return
 
     preprocess_img(root_folder,dump_file)
-    feature_data,label_data = get_training_data(dump_file)
+    feature_data,label_data = get_training_data(dump_file,mode)
 
     feature_data = np.array(feature_data)
     label_data = np.array(label_data)
@@ -134,6 +149,8 @@ if __name__ == '__main__':
     test_file = sys.argv[2]
 
     path = '/home/gaurav/Desktop/Machine Learning/train_dataset'
-    train_data_csv(path,"processed_data.pkl","train_data.csv")
+
+    #mode defines the consideration of all combinations, possible values={0,1}
+    train_data_csv(path,"processed_data.pkl","train_data.csv",mode=1)
     lib_svm(path+'/train_data.csv', path+'/train_data.csv','linear')
 
