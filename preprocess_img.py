@@ -7,6 +7,13 @@ import numpy as np
 from sklearn.decomposition import PCA
 import pandas as pd
 import csv
+import sys
+
+#set path of libsvm
+sys.path.insert(0,"/home/gaurav/Desktop/IITD_1stsem/ML/libsvm-3.23/python")
+
+from svm import svm_parameter, svm_problem
+from svmutil import svm_train, svm_predict
 
 def dump_object(dump_file,obj):
     writer = open(dump_file, 'wb')
@@ -20,6 +27,9 @@ def get_object(dump_file):
     return obj
 
 def preprocess_img(root_folder,dump_file):
+    if os.path.exists(dump_file):
+        return
+
     listPCAimages = []
     rewards = []
     for episode in listdir(root_folder):
@@ -42,7 +52,6 @@ def preprocess_img(root_folder,dump_file):
         processed_imgs = pca.fit_transform(images_per_episode)
         listPCAimages.append(processed_imgs)
         print(episode)
-        break
 
     dump_object(dump_file,[listPCAimages,rewards])
 
@@ -72,7 +81,11 @@ def get_training_data(dump_file):
             label_data.append(reward[i+9])
     return feature_data,label_data
 
-def train_data_csv(root_folder,dump_file):
+def train_data_csv(root_folder,dump_file,csv_file):
+
+    if os.path.exists(root_folder + '/' + csv_file):
+        return
+
     preprocess_img(root_folder,dump_file)
     feature_data,label_data = get_training_data(dump_file)
 
@@ -86,10 +99,41 @@ def train_data_csv(root_folder,dump_file):
     #merge feature and label data
     train_data = np.hstack((feature_data,label_data))
 
-    with open(root_folder + '/train_data.csv', 'w') as writeFile:
+    with open(root_folder + '/' + csv_file , 'w') as writeFile:
         writer = csv.writer(writeFile)
         writer.writerows(train_data)
         print('Done')
     writeFile.close()
 
-train_data_csv('/home/gaurav/Desktop/IITD_1stsem/ML/train_dataset',"processed_data.pkl")
+def get_data_from_csv(data_file):
+    training_data = pd.read_csv(data_file, header = None)
+    training_data = np.array(training_data.values)
+
+    features = training_data[:,:-1]
+    labels = training_data[:,-1]
+    
+    return features,labels
+
+def lib_svm(train_file,test_file,kernel):
+        features, labels = get_data_from_csv(train_file)
+        training_data = svm_problem(labels, features)
+        
+        if(kernel == 'gaussian'):
+            params = svm_parameter('-s 0 -t 2 -c 1 -g 0.05')
+        else:
+            params = svm_parameter('-s 0 -t 2 -c 1 -g 0.001275')
+            
+        model = svm_train(training_data, params)
+        
+        test_features, test_labels = get_data_from_csv(test_file)
+        p_labels, p_acc, p_vals = svm_predict(test_labels, test_features, model)
+
+if __name__ == '__main__':
+    #reading the data from files
+    train_file = sys.argv[1]
+    test_file = sys.argv[2]
+
+    path = '/home/gaurav/Desktop/Machine Learning/train_dataset'
+    train_data_csv(path,"processed_data.pkl","train_data.csv")
+    lib_svm(path+'/train_data.csv', path+'/train_data.csv','linear')
+
