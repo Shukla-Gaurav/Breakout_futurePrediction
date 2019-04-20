@@ -11,7 +11,7 @@ import sys
 import itertools
 
 #set path of libsvm
-sys.path.insert(0,"/home/gaurav/Desktop/MachineLearning/libsvm-3.23")
+sys.path.insert(0,"/home/gaurav/Desktop/MachineLearning/libsvm-3.23/python")
 
 from svm import svm_parameter, svm_problem
 from svmutil import svm_train, svm_predict
@@ -31,10 +31,21 @@ def preprocess_img(root_folder,dump_file):
     if os.path.exists(dump_file):
         return
 
-    listPCAimages = []
     rewards = []
+    episode_sizes = []
+    images_per_50_episode = []
+    count = 1
+
+    #process only 50 episodes
     for episode in listdir(root_folder):
-        images_per_episode = []
+        if count > 50:
+            break
+        count += 1
+        print(episode)
+
+        #store size of each episode
+        episode_sizes.append(len(listdir(root_folder + '/' + episode)))
+
         for img_file in listdir(root_folder + '/' + episode):
             if img_file.endswith(".csv"):
                 #read labels from csv file 
@@ -47,16 +58,22 @@ def preprocess_img(root_folder,dump_file):
             else:
                 img = Image.open(root_folder + '/' + episode +'/'+ img_file)
                 img_mat = np.array(img)
-                images_per_episode.append(img_mat.flatten())
-        images_per_episode = np.array(images_per_episode)
-        pca = PCA(n_components=50)
-        processed_imgs = pca.fit_transform(images_per_episode)
-        listPCAimages.append(processed_imgs)
-        print(episode)
+                images_per_50_episode.append(img_mat.flatten())
+    images_per_50_episode = np.array(images_per_50_episode)
+    pca = PCA(n_components=50)
+    processed_imgs = pca.fit_transform(images_per_50_episode)
+    rewards = np.array(rewards)
+
+    #stripe out set of images episode wise
+    listPCAimages = []
+    Start_ind = 0
+    for i in range(len(episode_sizes)):
+        listPCAimages.append(processed_imgs[Start_ind:Start_ind+episode_sizes[i]])
+        Start_ind += episode_sizes[i]
 
     dump_object(dump_file,[listPCAimages,rewards])
 
-def get_training_data(dump_file,mode):
+def get_training_data(dump_file,stride,samples):
     #read pickle file
     processed_data = get_object(dump_file)
     listPCAimages,rewards = processed_data[0],processed_data[1]
@@ -68,37 +85,39 @@ def get_training_data(dump_file,mode):
     for images,reward in zip(listPCAimages,rewards):
         print(reward.shape,":",count)
         count += 1
-        
-        for i in range(len(images)):
-            #break if exceeds
-            if(i+9 >= len(images)):
+
+        i = 0
+        while True:
+            #if i exceeds total length
+            if(i+7 >= len(images)):
                 break
-            
-            if(mode == 1):
-                img_set = images[i:i+6]
 
-                #get all combinations of images
-                combs = list(itertools.combinations(img_set, 4))
-                for comb in combs:
-                    img_sampling = np.vstack((np.array(comb),images[i+7]))
-                    vec_img = img_sampling.flatten()
+            img_set = images[i:i+6]
+            #get all combinations of images
+            combs = list(itertools.combinations(img_set, 4))
 
-                    #create training data
-                    feature_data.append(vec_img)
-                    label_data.append(reward[i+9])
+            #no of samples based on current reward
+            curr_reward = reward[i+7]
+            if curr_reward == 1:
+                combs = random.choices(combs, samples)
             else:
-                img_set = images[i:i+7]
-                img_sampling = img_set[np.random.choice(img_set.shape[0], 5, replace=False), :]
+                combs = random.choices(combs, 1)          
+
+            for comb in combs:
+                img_sampling = np.vstack((np.array(comb),images[i+6]))
                 vec_img = img_sampling.flatten()
 
                 #create training data
                 feature_data.append(vec_img)
-                label_data.append(reward[i+9])
+                label_data.append(curr_reward)
+
+            i += stride
+
     return feature_data,label_data
 
 def train_data_csv(root_folder,dump_file,csv_file,mode):
 
-    if os.path.exists(root_folder + '/' + csv_file):
+    if os.path.exists(csv_file):
         return
 
     preprocess_img(root_folder,dump_file)
@@ -114,7 +133,7 @@ def train_data_csv(root_folder,dump_file,csv_file,mode):
     #merge feature and label data
     train_data = np.hstack((feature_data,label_data))
 
-    with open(root_folder + '/' + csv_file , 'w') as writeFile:
+    with open(csv_file , 'w') as writeFile:
         writer = csv.writer(writeFile)
         writer.writerows(train_data)
         print('Done')
@@ -130,27 +149,27 @@ def get_data_from_csv(data_file):
     return features,labels
 
 def lib_svm(train_file,test_file,kernel):
+        print("inside libsvm")
         features, labels = get_data_from_csv(train_file)
-        training_data = svm_problem(labels, features)
+        print(features)
         
-        if(kernel == 'gaussian'):
-            params = svm_parameter('-s 0 -t 2 -c 1 -g 0.05')
-        else:
-            params = svm_parameter('-s 0 -t 2 -c 1 -g 0.001275')
+        # training_data = svm_problem(labels, features)
+        
+        # if(kernel == 'gaussian'):
+        #     params = svm_parameter('-s 0 -t 2 -c 1 -g 0.05')
+        # else:
+        #     params = svm_parameter('-s 0 -t 2 -c 1 -g 0.001275')
             
-        model = svm_train(training_data, params)
+        # model = svm_train(training_data, params)
         
-        test_features, test_labels = get_data_from_csv(test_file)
-        p_labels, p_acc, p_vals = svm_predict(test_labels, test_features, model)
+        # test_features, test_labels = get_data_from_csv(test_file)
+        # p_labels, p_acc, p_vals = svm_predict(test_labels, test_features, model)
 
 if __name__ == '__main__':
-    #reading the data from files
-    train_file = sys.argv[1]
-    test_file = sys.argv[2]
-
-    path = '/home/gaurav/Desktop/Machine Learning/train_dataset'
+    #root path
+    path = '/home/gaurav/Desktop/MachineLearning/train_dataset'
 
     #mode defines the consideration of all combinations, possible values={0,1}
-    train_data_csv(path,"processed_data.pkl","train_data.csv",mode=1)
-    lib_svm(path+'/train_data.csv', path+'/train_data.csv','linear')
+    train_data_csv(path,"processed_data.pkl",path+'/train_data.csv',mode=1)
+    print(lib_svm(path+'/train_data.csv', path+'/train_data.csv','linear'))
 
