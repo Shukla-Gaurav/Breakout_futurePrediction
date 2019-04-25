@@ -20,7 +20,7 @@ import itertools
 img_set = [[1,2],[3,4],[5,6],[3,8],[4,4]]
 #get all combinations of images
 combs = np.array(list(itertools.combinations(img_set, 4)))
-print(combs)
+print(combs[:-1])
 
 #no of samples based on current reward
 curr_reward = 1
@@ -28,6 +28,9 @@ length = len(combs)
 
 if curr_reward == 1:
     rand_ind = np.random.choice(length, 3,replace=False)
+    combs = combs[rand_ind]
+    
 else:
     rand_ind = np.random.choice(length, 1,replace=False)
-print(rand_ind)  
+# print(rand_ind)  
+# print(combs)
